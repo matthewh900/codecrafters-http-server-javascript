@@ -10,10 +10,12 @@ const server = net.createServer((socket) => {
     const [requestLine] = request.split("\r\n");
     const [method, path] = requestLine.split(" ");
 
-    if (method === "GET" && path.startsWith("/echo/")) {
+    if (path.startsWith("/") && !path.includes("echo")) {
+      socket.write("HTTP/1.1 200 OK\r\n\r\n");
+    } else if (method === "GET" && path.startsWith("/echo/")) {
       const echoStr = decodeURIComponent(path.slice(6));
-      const responseBody = JSON.stringify(echoStr).slice(1,-1);
-      const contentLength = Buffer.byteLength(responseBody)
+      const responseBody = JSON.stringify(echoStr).slice(1, -1);
+      const contentLength = Buffer.byteLength(responseBody);
 
       const response = [
         "HTTP/1.1 200 OK",
@@ -22,28 +24,24 @@ const server = net.createServer((socket) => {
         "",
         responseBody,
       ].join("\r\n");
-      console.log(response)
+      console.log(response);
 
       socket.write(response);
-    } else if (path.startsWith("/")) {
-        socket.write("HTTP/1.1 200 OK\r\n\r\n")
     } else {
-        const response = [
-            "HTTP/1.1 404 Not Found",
-            "Content-Type: text/plain",
-            "Content-Length: 9",
-            "",
-            "Not Found",
-          ].join("\r\n");
-    
-          socket.write(response);
+      const response = [
+        "HTTP/1.1 404 Not Found",
+        "Content-Type: text/plain",
+        "Content-Length: 9",
+        "",
+        "Not Found",
+      ].join("\r\n");
+
+      socket.write(response);
     }
 
     socket.end();
   });
-  socket.on("close", () => {
-    
-  });
+  socket.on("close", () => {});
 });
 
 server.listen(4221, "localhost");
