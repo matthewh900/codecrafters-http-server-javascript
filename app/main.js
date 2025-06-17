@@ -10,7 +10,9 @@ const server = net.createServer((socket) => {
     const [requestLine] = request.split("\r\n");
     const [method, path] = requestLine.split(" ");
 
-    if (path.startsWith("/") && !path.includes("echo")) {
+    //need to figure out how to make / = 200 OK and /echo/ = 200 OK and 404 not found to anything else
+
+    if (path === "/") {
       socket.write("HTTP/1.1 200 OK\r\n\r\n");
     } else if (method === "GET" && path.startsWith("/echo/")) {
       const echoStr = decodeURIComponent(path.slice(6));
@@ -24,7 +26,6 @@ const server = net.createServer((socket) => {
         "",
         responseBody,
       ].join("\r\n");
-      console.log(response);
 
       socket.write(response);
     } else {
