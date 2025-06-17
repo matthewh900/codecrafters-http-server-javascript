@@ -16,7 +16,7 @@ const server = net.createServer((socket) => {
 
       const response = [
         "HTTP/1.1 200 OK",
-        "Content-Type: application/json",
+        "Content-Type: text/plain",
         `Content-Length: ${Buffer.byteLength(responseBody)}`,
         "",
         responseBody,
