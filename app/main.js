@@ -5,18 +5,40 @@ console.log("Logs from your program will appear here!");
 
 // Uncomment this to pass the first stage
 const server = net.createServer((socket) => {
-  socket.on('data', (data) => {
-    const request = data.toString()
-    const requestLine = request.split('\r\n')[0]
-    const [method, path, version] = requestLine.split(' ')
-    if (path === '/'){
-        socket.write("HTTP/1.1 200 OK\r\n\r\n");
+  socket.on("data", (data) => {
+    const request = data.toString();
+    const [requestLine] = request.split("\r\n");
+    const [method, path] = requestLine.split(" ");
+
+    if (method === "GET" && path.startsWith("/echo/")) {
+      const echoStr = decodeURIComponent(path.slice(6));
+      const responseBody = JSON.stringify({ echo: echoStr });
+
+      const response = [
+        "HTTP/1.1 200 OK",
+        "Content-Type: application/json",
+        `Content-Length: ${Buffer.byteLength(responseBody)}`,
+        "",
+        responseBody,
+      ].join("\r\n");
+
+      socket.write(response);
     } else {
-        socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+      const response = [
+        "HTTP/1.1 404 Not Found",
+        "Content-Type: text/plain",
+        "Content-Length: 9",
+        "",
+        "Not Found",
+      ].join("\r\n");
+
+      socket.write(response);
     }
-  })
-  socket.on("close", () => {
+
     socket.end();
+  });
+  socket.on("close", () => {
+    
   });
 });
 
