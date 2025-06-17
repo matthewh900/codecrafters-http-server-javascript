@@ -14,7 +14,7 @@ const server = net.createServer((socket) => {
       const echoStr = decodeURIComponent(path.slice(6));
       const responseBody = JSON.stringify(echoStr);
       const contentLength = Buffer.byteLength(responseBody)
-      console.log(responseBody)
+      
       const response = [
         "HTTP/1.1 200 OK",
         "Content-Type: text/plain",
