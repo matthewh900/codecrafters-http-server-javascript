@@ -22,7 +22,7 @@ const server = net.createServer((socket) => {
         "",
         responseBody,
       ].join("\r\n");
-      console.log(response)
+      console.log(responseBody)
 
       socket.write(response);
     } else {
