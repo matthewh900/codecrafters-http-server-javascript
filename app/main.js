@@ -5,19 +5,20 @@ console.log("Logs from your program will appear here!");
 
 // Uncomment this to pass the first stage
 const server = net.createServer((socket) => {
-  socket.on("data", (data) => {
-    const request = data.toString();
+  socket.on("data", (buffer) => {
+    const request = buffer.toString();
     const [requestLine] = request.split("\r\n");
     const [method, path] = requestLine.split(" ");
 
     if (method === "GET" && path.startsWith("/echo/")) {
       const echoStr = decodeURIComponent(path.slice(6));
       const responseBody = JSON.stringify({ echo: echoStr });
+      const contentLength = Buffer.byteLength(responseBody)
 
       const response = [
         "HTTP/1.1 200 OK",
         "Content-Type: text/plain",
-        `Content-Length: ${Buffer.byteLength(responseBody)}`,
+        `Content-Length: ${contentLength}`,
         "",
         responseBody,
       ].join("\r\n");
