@@ -12,13 +12,14 @@ const server = net.createServer((socket) => {
 
     if (method === "GET" && path.startsWith("/echo/")) {
       const echoStr = decodeURIComponent(path.slice(6));
-      const responseBody = JSON.stringify(echoStr).slice(1,-1);
-      const contentLength = Buffer.byteLength(responseBody)
+      const responseBody = JSON.stringify(echoStr);
+      const contentLength = Buffer.byteLength(responseBody.slice(1,-1))
 
       const response = [
         "HTTP/1.1 200 OK",
         "Content-Type: text/plain",
         `Content-Length: ${contentLength}`,
+        "",
         responseBody,
       ].join("\r\n");
       console.log(response)
@@ -29,6 +30,7 @@ const server = net.createServer((socket) => {
         "HTTP/1.1 404 Not Found",
         "Content-Type: text/plain",
         "Content-Length: 9",
+        "",
         "Not Found",
       ].join("\r\n");
 
