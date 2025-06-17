@@ -19,7 +19,6 @@ const server = net.createServer((socket) => {
         "HTTP/1.1 200 OK",
         "Content-Type: text/plain",
         `Content-Length: ${contentLength}`,
-        "",
         responseBody,
       ].join("\r\n");
       console.log(response)
@@ -30,7 +29,6 @@ const server = net.createServer((socket) => {
         "HTTP/1.1 404 Not Found",
         "Content-Type: text/plain",
         "Content-Length: 9",
-        "",
         "Not Found",
       ].join("\r\n");
 
