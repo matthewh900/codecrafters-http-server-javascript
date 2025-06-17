@@ -12,7 +12,7 @@ const server = net.createServer((socket) => {
 
     if (method === "GET" && path.startsWith("/echo/")) {
       const echoStr = decodeURIComponent(path.slice(6));
-      const responseBody = JSON.stringify(echoStr.slice(1,-1));
+      const responseBody = JSON.stringify(echoStr).slice(1,-1);
       const contentLength = Buffer.byteLength(responseBody)
 
       const response = [
