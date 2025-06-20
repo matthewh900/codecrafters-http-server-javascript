@@ -39,7 +39,7 @@ const server = net.createServer((socket) => {
         }
       }
       const responseBody = `User-Agent: ${userAgent}`;
-      const contentLength = Buffer.byteLength(userAgent);
+      const contentLength = Buffer.byteLength(responseBody);
       console.log(responseBody);
       console.log(contentLength)
 
