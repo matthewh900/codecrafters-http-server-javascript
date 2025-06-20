@@ -26,22 +26,31 @@ const server = net.createServer((socket) => {
       ].join("\r\n");
 
       socket.write(response);
-    } else if (method === "GET" && path === "/user-agent"){
-        const userAgentLine = headerLines.find(line => line.toLowerCase().startsWith("user-agent:"))
-        const userAgent = userAgentLine ? userAgentLine.split(": ")[1] : "unknown"
-        const responseBody = `User-Agent: ${userAgent}`
-        const contentLength = Buffer.byteLength(userAgent);
-        console.log(responseBody)
+    } else if (method === "GET" && path === "/user-agent") {
+      const userAgentLine = headerLines.find((line) =>
+        line.toLowerCase().startsWith("user-agent:")
+      );
+      let userAgent = "Unknown";
 
-        const response = [
-            "HTTP/1.1 200 OK",
-            "Content-Type: text/plain",
-            `Content-Length: ${contentLength}`,
-            "",
-            responseBody
-        ].join("\r\n")
+      if (userAgentLine) {
+        const index = userAgentLine.indexOf(":");
+        if (index !== -1) {
+          userAgent = userAgentLine.slice(index + 1).trim();
+        }
+      }
+      const responseBody = `User-Agent: ${userAgent}`;
+      const contentLength = Buffer.byteLength(userAgent);
+      console.log(responseBody);
 
-        socket.write(response)
+      const response = [
+        "HTTP/1.1 200 OK",
+        "Content-Type: text/plain",
+        `Content-Length: ${contentLength}`,
+        "",
+        responseBody,
+      ].join("\r\n");
+
+      socket.write(response);
     } else {
       const response = [
         "HTTP/1.1 404 Not Found",
