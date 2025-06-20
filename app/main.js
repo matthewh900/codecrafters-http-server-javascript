@@ -7,10 +7,8 @@ console.log("Logs from your program will appear here!");
 const server = net.createServer((socket) => {
   socket.on("data", (buffer) => {
     const request = buffer.toString();
-    const [requestLine] = request.split("\r\n");
+    const [requestLine, ...headerLines] = request.split("\r\n");
     const [method, path] = requestLine.split(" ");
-
-    //need to figure out how to make / = 200 OK and /echo/ = 200 OK and 404 not found to anything else
 
     if (path === "/") {
       socket.write("HTTP/1.1 200 OK\r\n\r\n");
@@ -28,6 +26,21 @@ const server = net.createServer((socket) => {
       ].join("\r\n");
 
       socket.write(response);
+    } else if (method === "GET" && path === "/user-agent"){
+        const userAgentLine = headerLines.find(line => line.toLowerCase().startsWith("user-agent:"))
+        const userAgent = userAgentLine ? userAgentLine.split(": ")[1] : "unknown"
+        const responseBody = `User-Agent: ${userAgent}`
+        const contentLength = Buffer.byteLength(responseBody);
+
+        const response = [
+            "HTTP/1.1 200 OK",
+            "Content-Type: text/plain",
+            `Content-Length: ${contentLength}`,
+            "",
+            responseBody
+        ].join("\r\n")
+
+        socket.write(response)
     } else {
       const response = [
         "HTTP/1.1 404 Not Found",
