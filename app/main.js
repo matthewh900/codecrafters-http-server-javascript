@@ -31,6 +31,7 @@ const server = net.createServer((socket) => {
         const userAgent = userAgentLine ? userAgentLine.split(": ")[1] : "unknown"
         const responseBody = `User-Agent: ${userAgent}`
         const contentLength = Buffer.byteLength(userAgent);
+        console.log(responseBody)
 
         const response = [
             "HTTP/1.1 200 OK",
