@@ -1,55 +1,49 @@
 const net = require("net");
+const fs = require("fs");
+const path = require("path");
 
-// You can use print statements as follows for debugging, they'll be visible when running tests.
-console.log("Logs from your program will appear here!");
+const args = process.argv;
+const dirIndex = args.indexOf("--directory");
+let filesDirectory = ".";
 
-// Uncomment this to pass the first stage
+if (dirIndex !== -1 && args[dirIndex + 1]) {
+  filesDirectory = args[dirIndex + 1];
+}
+
 const server = net.createServer((socket) => {
   socket.on("data", (buffer) => {
     const request = buffer.toString();
     const [requestLine, ...headerLines] = request.split("\r\n");
-    const [method, path] = requestLine.split(" ");
+    const [method, urlPath] = requestLine.split(" ");
 
-    if (path === "/") {
+    if (urlPath === "/") {
       socket.write("HTTP/1.1 200 OK\r\n\r\n");
-    } else if (method === "GET" && path.startsWith("/echo/")) {
-      const echoStr = decodeURIComponent(path.slice(6));
-      const responseBody = JSON.stringify(echoStr).slice(1, -1);
-      const contentLength = Buffer.byteLength(responseBody);
+    } else if (method === "GET" && urlPath.startsWith("/files/")) {
+      const filename = decodeURIComponent(urlPath.slice("/files/".length));
+      const filePath = path.join(filesDirectory, filename);
 
-      const response = [
-        "HTTP/1.1 200 OK",
-        "Content-Type: text/plain",
-        `Content-Length: ${contentLength}`,
-        "",
-        responseBody,
-      ].join("\r\n");
-
-      socket.write(response);
-    } else if (method === "GET" && path === "/user-agent") {
-      const userAgentLine = headerLines.find((line) =>
-        line.toLowerCase().startsWith("user-agent:")
-      );
-      let userAgent = "Unknown";
-
-      if (userAgentLine) {
-        const index = userAgentLine.indexOf(":");
-        if (index !== -1) {
-          userAgent = userAgentLine.slice(index + 1).trim();
-        }
+      if (!filePath.startsWith(path.resolve(filesDirectory))) {
+        socket.write("HTTP/1.1 403 Forbidden\r\n\r\nForbidden");
+        socket.end();
+        return;
       }
-     
-      const contentLength = Buffer.byteLength(userAgent);
 
-      const response = [
-        "HTTP/1.1 200 OK",
-        "Content-Type: text/plain",
-        `Content-Length: ${contentLength}`,
-        "",
-        userAgent,
-      ].join("\r\n");
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+        } else {
+          const headers = [
+            "HTTP/1.1 200 OK",
+            "Content-Type: application/octet-stream",
+            `Content-Length: ${data.length}`,
+            "",
+          ].join("\r\n");
 
-      socket.write(response);
+          socket.write(headers);
+          socket.write(data);
+        }
+        socket.end();
+      });
     } else {
       const response = [
         "HTTP/1.1 404 Not Found",
@@ -60,11 +54,9 @@ const server = net.createServer((socket) => {
       ].join("\r\n");
 
       socket.write(response);
+      socket.end();
     }
-
-    socket.end();
   });
-  socket.on("close", () => {});
 });
 
 server.listen(4221, "localhost");
