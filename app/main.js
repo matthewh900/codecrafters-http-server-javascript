@@ -1,6 +1,7 @@
 const net = require("net");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib"); // Added for gzip compression
 
 const args = process.argv;
 const dirIndex = args.indexOf("--directory");
@@ -53,28 +54,48 @@ const server = net.createServer((socket) => {
       socket.write("HTTP/1.1 200 OK\r\n\r\n");
       socket.end();
 
-    // Route: "/echo/{str}"
+    // Route: "/echo/{str}" — now with gzip compression!
     } else if (method === "GET" && urlPath.startsWith("/echo/")) {
       const echoStr = decodeURIComponent(urlPath.slice(6));
-      const responseBody = JSON.stringify(echoStr).slice(1, -1); // Remove extra quotes
-      const contentLength = Buffer.byteLength(responseBody);
-
       const acceptEncoding = (headers["accept-encoding"] || "").toLowerCase();
+      const shouldGzip = acceptEncoding.includes("gzip");
 
-      const responseHeaders = [
-        "HTTP/1.1 200 OK",
-        "Content-Type: text/plain",
-      ];
+      if (shouldGzip) {
+        zlib.gzip(echoStr, (err, compressed) => {
+          if (err) {
+            socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+            socket.end();
+            return;
+          }
 
-      if (acceptEncoding.includes("gzip")) {
-        responseHeaders.push("Content-Encoding: gzip");
+          const responseHeaders = [
+            "HTTP/1.1 200 OK",
+            "Content-Type: text/plain",
+            "Content-Encoding: gzip",
+            `Content-Length: ${compressed.length}`,
+            "",
+            ""
+          ].join("\r\n");
+
+          socket.write(responseHeaders);
+          socket.write(compressed);
+          socket.end();
+        });
+      } else {
+        const responseBody = JSON.stringify(echoStr).slice(1, -1);
+        const contentLength = Buffer.byteLength(responseBody);
+
+        const response = [
+          "HTTP/1.1 200 OK",
+          "Content-Type: text/plain",
+          `Content-Length: ${contentLength}`,
+          "",
+          responseBody
+        ].join("\r\n");
+
+        socket.write(response);
+        socket.end();
       }
-
-      responseHeaders.push(`Content-Length: ${contentLength}`, "", responseBody);
-
-      const response = responseHeaders.join("\r\n");
-      socket.write(response);
-      socket.end();
 
     // Route: "/user-agent"
     } else if (method === "GET" && urlPath === "/user-agent") {
@@ -126,7 +147,7 @@ const server = net.createServer((socket) => {
             "Content-Type: application/octet-stream",
             `Content-Length: ${data.length}`,
             "",
-            "",
+            ""
           ].join("\r\n");
 
           socket.write(headers);
