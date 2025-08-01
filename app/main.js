@@ -18,23 +18,18 @@ const server = net.createServer((socket) => {
   socket.on("data", (chunk) => {
     requestData = Buffer.concat([requestData, chunk]);
 
-    // Try to parse headers first: headers end with \r\n\r\n
     const requestStr = requestData.toString();
     const headerEndIndex = requestStr.indexOf("\r\n\r\n");
     if (headerEndIndex === -1) {
-      // Headers not fully received yet — wait for more data
-      return;
+      return; // Wait for full headers
     }
 
-    // Separate headers and possible partial body
     const headersPart = requestStr.slice(0, headerEndIndex);
     const bodyPart = requestData.slice(headerEndIndex + 4);
 
-    // Parse request line and headers
     const [requestLine, ...headerLines] = headersPart.split("\r\n");
     const [method, urlPath] = requestLine.split(" ");
 
-    // Parse headers into object
     const headers = {};
     for (const line of headerLines) {
       const [key, ...rest] = line.split(":");
@@ -43,41 +38,45 @@ const server = net.createServer((socket) => {
       }
     }
 
-    // For POST, we need to wait until full body received:
     const contentLength = headers["content-length"]
       ? parseInt(headers["content-length"], 10)
       : 0;
 
     if (bodyPart.length < contentLength) {
-      // Not received full body yet; wait for more data
-      return;
+      return; // Wait for full body
     }
 
-    // Now we have full request (headers + full body)
     const body = bodyPart.slice(0, contentLength);
 
-    // Handle routes:
-
+    // Route: "/"
     if (urlPath === "/") {
       socket.write("HTTP/1.1 200 OK\r\n\r\n");
       socket.end();
 
+    // Route: "/echo/{str}"
     } else if (method === "GET" && urlPath.startsWith("/echo/")) {
       const echoStr = decodeURIComponent(urlPath.slice(6));
-      const responseBody = JSON.stringify(echoStr).slice(1, -1);
+      const responseBody = JSON.stringify(echoStr).slice(1, -1); // Remove extra quotes
       const contentLength = Buffer.byteLength(responseBody);
 
-      const response = [
+      const acceptEncoding = (headers["accept-encoding"] || "").toLowerCase();
+
+      const responseHeaders = [
         "HTTP/1.1 200 OK",
         "Content-Type: text/plain",
-        `Content-Length: ${contentLength}`,
-        "",
-        responseBody,
-      ].join("\r\n");
+      ];
 
+      if (acceptEncoding.includes("gzip")) {
+        responseHeaders.push("Content-Encoding: gzip");
+      }
+
+      responseHeaders.push(`Content-Length: ${contentLength}`, "", responseBody);
+
+      const response = responseHeaders.join("\r\n");
       socket.write(response);
       socket.end();
 
+    // Route: "/user-agent"
     } else if (method === "GET" && urlPath === "/user-agent") {
       const userAgentLine = headerLines.find((line) =>
         line.toLowerCase().startsWith("user-agent:")
@@ -104,6 +103,7 @@ const server = net.createServer((socket) => {
       socket.write(response);
       socket.end();
 
+    // Route: "/files/{filename}" (GET)
     } else if (method === "GET" && urlPath.startsWith("/files/")) {
       const filename = decodeURIComponent(urlPath.slice("/files/".length));
       const filePath = path.join(filesDirectory, filename);
@@ -135,6 +135,7 @@ const server = net.createServer((socket) => {
         }
       });
 
+    // Route: "/files/{filename}" (POST)
     } else if (method === "POST" && urlPath.startsWith("/files/")) {
       const filename = decodeURIComponent(urlPath.slice("/files/".length));
       const filePath = path.join(filesDirectory, filename);
@@ -147,20 +148,18 @@ const server = net.createServer((socket) => {
         return;
       }
 
-      // Write the request body to the file
       fs.writeFile(resolvedFile, body, (err) => {
         if (err) {
-          // Could respond with 500 but spec doesn't mention it, so:
           socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
           socket.end();
           return;
         }
 
-        // Success: respond with 201 Created
         socket.write("HTTP/1.1 201 Created\r\n\r\n");
         socket.end();
       });
 
+    // Route not found
     } else {
       const response = [
         "HTTP/1.1 404 Not Found",
