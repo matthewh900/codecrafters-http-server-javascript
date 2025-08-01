@@ -19,20 +19,24 @@ const server = net.createServer((socket) => {
   socket.on("data", (chunk) => {
     requestData = Buffer.concat([requestData, chunk]);
 
+    // Handle multiple requests per connection
     while (true) {
       const requestStr = requestData.toString();
       const headerEndIndex = requestStr.indexOf("\r\n\r\n");
 
       if (headerEndIndex === -1) {
-        return; // wait for full headers
+        // Headers not fully received yet, wait for more data
+        return;
       }
 
+      // Parse headers and body
       const headersPart = requestStr.slice(0, headerEndIndex);
       const bodyPart = requestData.slice(headerEndIndex + 4);
 
       const [requestLine, ...headerLines] = headersPart.split("\r\n");
       const [method, urlPath] = requestLine.split(" ");
 
+      // Parse headers into a dictionary (lowercase keys)
       const headers = {};
       for (const line of headerLines) {
         const [key, ...rest] = line.split(":");
@@ -41,37 +45,50 @@ const server = net.createServer((socket) => {
         }
       }
 
+      // Determine content length and if full body is received
       const contentLength = headers["content-length"]
         ? parseInt(headers["content-length"], 10)
         : 0;
 
       if (bodyPart.length < contentLength) {
-        return; // wait for full body
+        // Wait for full body
+        return;
       }
 
       const fullRequestLength = headerEndIndex + 4 + contentLength;
       const body = bodyPart.slice(0, contentLength);
 
+      // Check for Accept-Encoding and Connection headers
       const acceptEncoding = (headers["accept-encoding"] || "").toLowerCase();
       const connectionHeader = (headers["connection"] || "").toLowerCase();
       const shouldClose = connectionHeader === "close";
 
+      // Helper function to end socket if needed
       const endSocketIfNeeded = () => {
         if (shouldClose) {
           socket.end();
         }
       };
 
-      // Route: "/"
+      // Routing logic
+
       if (urlPath === "/") {
-        socket.write("HTTP/1.1 200 OK\r\n\r\n");
+        // Root path: simple 200 OK with no body
+        let responseHeaders = [
+          "HTTP/1.1 200 OK",
+          "",
+          ""
+        ];
+        if (shouldClose) responseHeaders.splice(1, 0, "Connection: close");
+
+        socket.write(responseHeaders.join("\r\n"));
         endSocketIfNeeded();
 
-      // Route: "/echo/{str}" — supports gzip
       } else if (method === "GET" && urlPath.startsWith("/echo/")) {
         const echoStr = decodeURIComponent(urlPath.slice(6));
 
-        const sendGzipped = () => {
+        if (acceptEncoding.includes("gzip")) {
+          // Respond with gzip compressed body
           zlib.gzip(echoStr, (err, compressed) => {
             if (err) {
               socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
@@ -79,45 +96,39 @@ const server = net.createServer((socket) => {
               return;
             }
 
-            const headers = [
+            const responseHeaders = [
               "HTTP/1.1 200 OK",
               "Content-Type: text/plain",
               "Content-Encoding: gzip",
               `Content-Length: ${compressed.length}`,
             ];
-            if (shouldClose) headers.push("Connection: close");
-            headers.push("", "");
+            if (shouldClose) responseHeaders.push("Connection: close");
+            responseHeaders.push("", "");
 
-            socket.write(headers.join("\r\n"));
+            socket.write(responseHeaders.join("\r\n"));
             socket.write(compressed);
             endSocketIfNeeded();
           });
-        };
-
-        const sendPlain = () => {
-          const responseBody = echoStr;
-          const buffer = Buffer.from(responseBody, "utf-8");
-          const headers = [
+        } else {
+          // Respond with plain text body
+          const buffer = Buffer.from(echoStr, "utf-8");
+          const responseHeaders = [
             "HTTP/1.1 200 OK",
             "Content-Type: text/plain",
             `Content-Length: ${buffer.length}`,
           ];
-          if (shouldClose) headers.push("Connection: close");
-          headers.push("", responseBody);
-          socket.write(headers.join("\r\n"));
-          endSocketIfNeeded();
-        };
+          if (shouldClose) responseHeaders.push("Connection: close");
+          responseHeaders.push("", echoStr);
 
-        if (acceptEncoding.includes("gzip")) {
-          sendGzipped();
-        } else {
-          sendPlain();
+          socket.write(responseHeaders.join("\r\n"));
+          endSocketIfNeeded();
         }
 
-      // Route: "/user-agent"
       } else if (method === "GET" && urlPath === "/user-agent") {
+        // Return User-Agent header value or "Unknown"
         const userAgent = headers["user-agent"] || "Unknown";
         const contentLength = Buffer.byteLength(userAgent);
+
         const responseHeaders = [
           "HTTP/1.1 200 OK",
           "Content-Type: text/plain",
@@ -129,8 +140,8 @@ const server = net.createServer((socket) => {
         socket.write(responseHeaders.join("\r\n"));
         endSocketIfNeeded();
 
-      // Route: "/files/{filename}" (GET)
       } else if (method === "GET" && urlPath.startsWith("/files/")) {
+        // Serve file from specified directory
         const filename = decodeURIComponent(urlPath.slice("/files/".length));
         const filePath = path.join(filesDirectory, filename);
         const resolvedBase = path.resolve(filesDirectory);
@@ -146,22 +157,22 @@ const server = net.createServer((socket) => {
           if (err) {
             socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
           } else {
-            const headers = [
+            const responseHeaders = [
               "HTTP/1.1 200 OK",
               "Content-Type: application/octet-stream",
               `Content-Length: ${data.length}`,
             ];
-            if (shouldClose) headers.push("Connection: close");
-            headers.push("", "");
+            if (shouldClose) responseHeaders.push("Connection: close");
+            responseHeaders.push("", "");
 
-            socket.write(headers.join("\r\n"));
+            socket.write(responseHeaders.join("\r\n"));
             socket.write(data);
           }
           endSocketIfNeeded();
         });
 
-      // Route: "/files/{filename}" (POST)
       } else if (method === "POST" && urlPath.startsWith("/files/")) {
+        // Save body to file
         const filename = decodeURIComponent(urlPath.slice("/files/".length));
         const filePath = path.join(filesDirectory, filename);
         const resolvedBase = path.resolve(filesDirectory);
@@ -182,32 +193,34 @@ const server = net.createServer((socket) => {
           endSocketIfNeeded();
         });
 
-      // Fallback: Not found
       } else {
+        // Fallback: 404 Not Found
         const body = "Not Found";
-        const headers = [
+        const responseHeaders = [
           "HTTP/1.1 404 Not Found",
           "Content-Type: text/plain",
           `Content-Length: ${Buffer.byteLength(body)}`,
         ];
-        if (shouldClose) headers.push("Connection: close");
-        headers.push("", body);
+        if (shouldClose) responseHeaders.push("Connection: close");
+        responseHeaders.push("", body);
 
-        socket.write(headers.join("\r\n"));
+        socket.write(responseHeaders.join("\r\n"));
         endSocketIfNeeded();
       }
 
-      // Remove this request from the buffer
+      // Remove processed request from buffer and continue to check if more requests are pending
       requestData = requestData.slice(fullRequestLength);
 
-      // If no more data, stop processing
+      // Stop processing if no more data to parse
       if (requestData.length === 0) {
         return;
       }
     }
   });
 
-  socket.on("close", () => {});
+  socket.on("close", () => {
+    // Connection closed by client or server
+  });
 });
 
 server.listen(4221, "localhost");
